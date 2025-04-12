@@ -1,0 +1,114 @@
+// RustAI-OS - Sistema Operativo barebone especializado en IA
+// Estructura del proyecto
+
+// Configuración del crate principal
+// Cargo.toml
+[package]
+name = "rustai-os"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# Dependencias para el kernel
+bootloader = "0.9.23"
+x86_64 = "0.14.10"
+pic8259 = "0.10.2"
+pc-keyboard = "0.5.1"
+spin = "0.5.2"
+uart_16550 = "0.2.18"
+linked_list_allocator = "0.9.1"
+
+# Características específicas para IA
+ndarray = { version = "0.15.6", default-features = false, features = ["matrixmultiply"] }
+half = { version = "2.2.1", default-features = false }
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+opt-level = 3
+
+# Este archivo es src/main.rs - Punto de entrada
+#![no_std] // No usar la biblioteca estándar de Rust
+#![no_main] // No usar el punto de entrada estándar de Rust
+#![feature(custom_test_frameworks)]
+#![feature(abi_x86_interrupt)]
+#![feature(alloc_error_handler)]
+
+extern crate alloc;
+
+mod memory;
+mod interrupts;
+mod gdt;
+mod allocator;
+mod ai;
+mod network;
+mod api;
+
+use core::panic::PanicInfo;
+use bootloader::{BootInfo, entry_point};
+
+// Punto de entrada definido por bootloader
+entry_point!(kernel_main);
+
+fn kernel_main(boot_info: &'static BootInfo) -> ! {
+    println!("RustAI-OS: Inicializando...");
+    
+    // Inicializar componentes del sistema
+    gdt::init();
+    interrupts::init();
+    
+    // Configurar gestor de memoria
+    let phys_mem_offset = boot_info.physical_memory_offset;
+    let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    let mut frame_allocator = unsafe {
+        memory::BootInfoFrameAllocator::init(&boot_info.memory_map)
+    };
+    
+    // Inicializar asignador de memoria
+    allocator::init_heap(&mut mapper, &mut frame_allocator)
+        .expect("Fallo en la inicialización del heap");
+    
+    // Inicializar subsistema de IA
+    ai::init();
+    
+    // Inicializar subsistema de red
+    network::init();
+    
+    // Inicializar servidor REST API
+    api::init();
+    
+    println!("RustAI-OS: Sistema listo para operaciones de IA");
+    
+    // Bucle principal
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
+
+// Controlador de pánico
+#[panic_handler]
+fn panic(info: &PanicInfo) -> ! {
+    println!("KERNEL PANIC: {}", info);
+    loop {
+        x86_64::instructions::hlt();
+    }
+}
+
+// Implementación básica de println! para depuración
+#[macro_export]
+macro_rules! println {
+    () => ($crate::print!("\n"));
+    ($($arg:tt)*) => ($crate::print!("{}\n", format_args!($($arg)*)));
+}
+
+// Implementación de print!
+#[macro_export]
+macro_rules! print {
+    ($($arg:tt)*) => {
+        $crate::vga_buffer::_print(format_args!($($arg)*))
+    };
+}
