@@ -1,0 +1,33 @@
+name: RustAndy
+
+on:
+  push:
+    branches: [ main ] # Ejecutar al hacer push en la rama principal (ajusta según tus ramas)
+  pull_request:
+    branches: [ main ] # Ejecutar al crear o actualizar una Pull Request en la rama principal (ajusta según tus ramas)
+  workflow_dispatch: # Permite ejecutar el workflow manualmente desde la interfaz de GitHub
+
+jobs:
+  build:
+    name: Build Release
+    runs-on: ubuntu-latest # Elige el sistema operativo para la compilación (puedes usar otros como windows-latest, macos-latest)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Rust toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable # Puedes especificar una versión o canal diferente (e.g., nightly, 1.65.0)
+
+      - name: Build release
+        run: cargo build --release
+
+      # Opcional: Puedes añadir pasos para ejecutar pruebas, subir artefactos, etc.
+      # Ejemplo para subir el ejecutable como un artefacto:
+      - name: Upload executable artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: release-executable
+          path: target/release/<nombre_de_tu_ejecutable>
