@@ -1,4 +1,4 @@
-name: RustAndy
+name: Build Rust
 
 on:
   push:
